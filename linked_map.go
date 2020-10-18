@@ -33,7 +33,7 @@ func (m *LinkedMap) Store(key string, value interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	m.store(key, value)
 }
@@ -61,7 +61,7 @@ func (m *LinkedMap) Load(key string) (value interface{}, ok bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	item, ok := m.entryMap[key]
 	if ok {
@@ -74,7 +74,7 @@ func (m *LinkedMap) LoadOrStore(key string, value interface{}) (actual interface
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	if item, ok := m.entryMap[key]; ok {
 		return item.Value, true
@@ -87,7 +87,7 @@ func (m *LinkedMap) StoreOrCompare(key string, value interface{}, compare func(s
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 
 	if item, ok := m.entryMap[key]; ok {
@@ -105,7 +105,7 @@ func (m *LinkedMap) Delete(key string) interface{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	if val, ok := m.entryMap[key]; ok {
 		delete(m.entryMap, key)
@@ -118,7 +118,7 @@ func (m *LinkedMap) Clear() []Entry {
 	m.mu.Lock()
 	if m.entryMap == nil {
 		m.mu.Unlock()
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	deleted := m.entryMap
 	m.entryMap = map[string]*linkedEntry{}
@@ -134,7 +134,7 @@ func (m *LinkedMap) Range(f func(key interface{}, value interface{}) bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	node := m.head
 	for node != nil {
@@ -149,7 +149,7 @@ func (m *LinkedMap) Destroy() {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	m.entryMap = nil
 	m.head = nil
@@ -160,7 +160,7 @@ func (m *LinkedMap) Size() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	return len(m.entryMap)
 }

@@ -18,4 +18,4 @@ type (
 	}
 )
 
-const MapDestroyed = "MapDestroyed"
+const ErrMapDestroyed = "ErrMapDestroyed"

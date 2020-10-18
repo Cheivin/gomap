@@ -76,7 +76,7 @@ func (m *TTLMap) DeleteExpired() map[string]interface{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	now := time.Now().UnixNano()
 	deleted := map[string]interface{}{}
@@ -109,7 +109,7 @@ func (m *TTLMap) Store(key string, value interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	m.store(key, value)
 }
@@ -118,7 +118,7 @@ func (m *TTLMap) Load(key string) (value interface{}, ok bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	item, ok := m.entryMap[key]
 	if ok {
@@ -138,7 +138,7 @@ func (m *TTLMap) LoadOrStore(key string, value interface{}) (actual interface{},
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	if item, ok := m.entryMap[key]; ok {
 		if !item.expired() {
@@ -156,7 +156,7 @@ func (m *TTLMap) StoreOrCompare(key string, value interface{}, compare func(stor
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 
 	if item, ok := m.entryMap[key]; ok {
@@ -177,7 +177,7 @@ func (m *TTLMap) Delete(key string) interface{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	if val, ok := m.entryMap[key]; ok {
 		delete(m.entryMap, key)
@@ -192,7 +192,7 @@ func (m *TTLMap) Clear() []Entry {
 	m.mu.Lock()
 	if m.entryMap == nil {
 		m.mu.Unlock()
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	now := time.Now().UnixNano()
 	deleted := m.entryMap
@@ -211,7 +211,7 @@ func (m *TTLMap) Range(f func(key interface{}, value interface{}) bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	for key, item := range m.entryMap {
 		if !item.expired() {
@@ -229,7 +229,7 @@ func (m *TTLMap) Destroy() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	m.exit <- true
 	m.entryMap = nil
@@ -239,7 +239,7 @@ func (m *TTLMap) Size() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.entryMap == nil {
-		panic(errors.New(MapDestroyed))
+		panic(errors.New(ErrMapDestroyed))
 	}
 	return len(m.entryMap)
 }
