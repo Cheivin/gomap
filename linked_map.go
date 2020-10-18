@@ -109,6 +109,12 @@ func (m *LinkedMap) Delete(key string) interface{} {
 	}
 	if val, ok := m.entryMap[key]; ok {
 		delete(m.entryMap, key)
+		if val.after != nil {
+			val.after.before = val.before
+		}
+		if val.before != nil {
+			val.before.after = val.after
+		}
 		return val.Value
 	}
 	return nil
@@ -120,12 +126,16 @@ func (m *LinkedMap) Clear() []Entry {
 		m.mu.Unlock()
 		panic(errors.New(ErrMapDestroyed))
 	}
-	deleted := m.entryMap
-	m.entryMap = map[string]*linkedEntry{}
-	m.mu.Unlock()
 	var entries []Entry
-	for _, v := range deleted {
-		entries = append(entries, *v.Entry)
+	node := m.head
+	m.entryMap = map[string]*linkedEntry{}
+	m.head = nil
+	m.tail = nil
+	m.mu.Unlock()
+
+	for node != nil {
+		entries = append(entries, *node.Entry)
+		node = node.after
 	}
 	return entries
 }
