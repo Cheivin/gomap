@@ -45,19 +45,21 @@ func (e *ttlEntry) expired() bool {
 }
 
 func (e *ttlEntry) renew(expiration time.Duration) {
-	if e.expired() {
-		return
+	if expiration > 0 && e.expiration > 0 {
+		if e.expired() {
+			return
+		}
+		e.expiration = time.Now().Add(expiration).UnixNano()
 	}
-	e.expiration = time.Now().Add(expiration).UnixNano()
 }
 
 //gcLoop 过期清理轮询
 func (m *TTLMap) gcLoop() {
-	if m.gcInterval <= 0 {
-		m.gcInterval = 100 * time.Millisecond
-	}
 	if m.expiration <= 0 {
 		return
+	}
+	if m.gcInterval <= 0 {
+		m.gcInterval = 100 * time.Millisecond
 	}
 	ticker := time.NewTicker(m.gcInterval)
 	for {
@@ -161,12 +163,9 @@ func (m *TTLMap) StoreOrCompare(key string, value interface{}, compare func(stor
 
 	if item, ok := m.entryMap[key]; ok {
 		if !item.expired() {
-			item.renew(m.expiration)
 			if compare != nil {
-				item.Value = compare(item.Value, value)
+				value = compare(item.Value, value)
 			}
-			m.entryMap[key] = item
-			return
 		}
 	}
 	// 存入值
@@ -231,7 +230,7 @@ func (m *TTLMap) Destroy() {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	m.exit <- true
+	close(m.exit)
 	m.entryMap = nil
 }
 

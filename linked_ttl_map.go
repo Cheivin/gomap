@@ -67,11 +67,10 @@ func (m *LinkedTTLMap) DeleteExpired() []Entry {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	now := time.Now().UnixNano()
 	var entries []Entry
-	for key, v := range m.entryMap {
-		if v.expiration > 0 && now > v.expiration {
-			delete(m.entryMap, key)
+	for _, v := range m.entryMap {
+		if v.expired() {
+			m.delete(v)
 			entries = append(entries, *v.Entry)
 		}
 	}
@@ -128,27 +127,24 @@ func (m *LinkedTTLMap) Load(key string) (value interface{}, ok bool) {
 			}
 			return item.Value, true
 		} else {
-			m.delete(key)
+			m.delete(item)
 		}
 	}
 	return nil, false
 }
 
-func (m *LinkedTTLMap) delete(key string) interface{} {
+func (m *LinkedTTLMap) delete(item *linkedTTLEntry) interface{} {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	if val, ok := m.entryMap[key]; ok {
-		delete(m.entryMap, key)
-		if val.after != nil {
-			val.after.before = val.before
-		}
-		if val.before != nil {
-			val.before.after = val.after
-		}
-		return val.Value
+	delete(m.entryMap, item.Key)
+	if item.after != nil {
+		item.after.before = item.before
 	}
-	return nil
+	if item.before != nil {
+		item.before.after = item.after
+	}
+	return item.Value
 }
 
 func (m *LinkedTTLMap) LoadOrStore(key string, value interface{}) (actual interface{}, loaded bool) {
@@ -197,7 +193,10 @@ func (m *LinkedTTLMap) Delete(key string) interface{} {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	return m.delete(key)
+	if item, ok := m.entryMap[key]; ok {
+		return m.delete(item)
+	}
+	return nil
 }
 
 func (m *LinkedTTLMap) Clear() []Entry {
@@ -206,7 +205,6 @@ func (m *LinkedTTLMap) Clear() []Entry {
 		m.mu.Unlock()
 		panic(errors.New(ErrMapDestroyed))
 	}
-	now := time.Now().UnixNano()
 	node := m.head
 	m.entryMap = map[string]*linkedTTLEntry{}
 	m.head = nil
@@ -214,7 +212,7 @@ func (m *LinkedTTLMap) Clear() []Entry {
 	m.mu.Unlock()
 	var entries []Entry
 	for node != nil {
-		if m.expiration <= 0 || now <= node.expiration {
+		if !node.expired() {
 			entries = append(entries, *node.Entry)
 		}
 		node = node.after
@@ -228,10 +226,9 @@ func (m *LinkedTTLMap) Range(f func(key interface{}, value interface{}) bool) {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	now := time.Now().UnixNano()
 	node := m.head
 	for node != nil {
-		if m.expiration <= 0 || now <= node.expiration {
+		if !node.expired() {
 			if !f(node.Key, node.Value) {
 				break
 			}
@@ -249,7 +246,7 @@ func (m *LinkedTTLMap) Destroy() {
 	m.entryMap = nil
 	m.head = nil
 	m.tail = nil
-	m.exit <- true
+	close(m.exit)
 }
 
 func (m *LinkedTTLMap) Size() int {
