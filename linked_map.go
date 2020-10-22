@@ -8,13 +8,13 @@ import (
 type (
 	LinkedMap struct {
 		entryMap map[string]*linkedEntry // 缓存数据
-		mu       *sync.RWMutex           // 锁
+		mu       sync.RWMutex            // 锁
 		head     *linkedEntry            // 头节点
 		tail     *linkedEntry            // 尾节点
 	}
 
 	linkedEntry struct {
-		*Entry              // 对象
+		Entry               // 对象
 		before *linkedEntry // 前一节点
 		after  *linkedEntry // 后一节点
 	}
@@ -24,7 +24,7 @@ func NewLinkedMap() *LinkedMap {
 	c := &LinkedMap{
 		entryMap: map[string]*linkedEntry{},
 		head:     nil,
-		mu:       &sync.RWMutex{},
+		mu:       sync.RWMutex{},
 	}
 	return c
 }
@@ -39,22 +39,43 @@ func (m *LinkedMap) Store(key string, value interface{}) {
 }
 
 func (m *LinkedMap) store(key string, value interface{}) {
-	entry := &linkedEntry{
-		before: m.tail,
-		after:  nil,
-		Entry: &Entry{
-			Key:   key,
-			Value: value,
-		},
+	entry, ok := m.entryMap[key]
+	if ok {
+		entry := &linkedEntry{
+			Entry: Entry{
+				Key:   key,
+				Value: value,
+			},
+			before: entry.before,
+			after:  entry.after,
+		}
+		if entry.before != nil {
+			entry.before.after = entry
+		} else {
+			m.head = entry
+		}
+		if entry.after != nil {
+			entry.after.before = entry
+		} else {
+			m.tail = entry
+		}
+	} else {
+		entry = &linkedEntry{
+			Entry: Entry{
+				Key:   key,
+				Value: value,
+			},
+			before: m.tail,
+			after:  nil,
+		}
+		if entry.before == nil {
+			m.head = entry
+		} else {
+			m.tail.after = entry
+		}
+		m.tail = entry
 	}
 	m.entryMap[key] = entry
-
-	if m.tail == nil {
-		m.head = entry
-	} else {
-		m.tail.after = entry
-	}
-	m.tail = entry
 }
 
 func (m *LinkedMap) Load(key string) (value interface{}, ok bool) {
@@ -107,15 +128,20 @@ func (m *LinkedMap) Delete(key string) interface{} {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
-	if val, ok := m.entryMap[key]; ok {
-		delete(m.entryMap, key)
-		if val.after != nil {
-			val.after.before = val.before
+	if item, ok := m.entryMap[key]; ok {
+		delete(m.entryMap, item.Key)
+		if item.after != nil {
+			item.after.before = item.before
+			item.after = nil
+		} else {
+			m.tail = item.before
 		}
-		if val.before != nil {
-			val.before.after = val.after
+		if item.before != nil {
+			item.before.after = item.after
+			item.before = nil
+		} else {
+			m.head = item.after
 		}
-		return val.Value
 	}
 	return nil
 }
@@ -126,15 +152,18 @@ func (m *LinkedMap) Clear() []Entry {
 		m.mu.Unlock()
 		panic(errors.New(ErrMapDestroyed))
 	}
-	var entries []Entry
 	node := m.head
 	m.entryMap = map[string]*linkedEntry{}
 	m.head = nil
 	m.tail = nil
 	m.mu.Unlock()
-
+	var entries []Entry
 	for node != nil {
-		entries = append(entries, *node.Entry)
+		entries = append(entries, node.Entry)
+		if node.before != nil {
+			node.before.after = nil
+			node.before = nil
+		}
 		node = node.after
 	}
 	return entries
@@ -161,9 +190,8 @@ func (m *LinkedMap) Destroy() {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
+	m.Clear()
 	m.entryMap = nil
-	m.head = nil
-	m.tail = nil
 }
 
 func (m *LinkedMap) Size() int {

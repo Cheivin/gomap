@@ -8,16 +8,16 @@ import (
 
 type (
 	TTLMap struct {
-		entryMap    map[string]*ttlEntry // 缓存数据
-		mu          *sync.RWMutex        // 锁
-		exit        chan bool            // 退出标志
-		gcInterval  time.Duration        // 清理周期
-		expiration  time.Duration        // 过期时间
-		renewOnLoad bool                 // 读取时续租时间
+		entryMap    map[string]ttlEntry // 缓存数据
+		mu          sync.RWMutex        // 锁
+		exit        chan bool           // 退出标志
+		gcInterval  time.Duration       // 清理周期
+		expiration  time.Duration       // 过期时间
+		renewOnLoad bool                // 读取时续租时间
 	}
 
 	ttlEntry struct {
-		*Entry
+		Entry
 		expiration int64
 	}
 )
@@ -26,8 +26,8 @@ func NewTTLMap(expiration, gcInterval time.Duration, renewOnLoad bool) *TTLMap {
 	m := &TTLMap{
 		expiration:  expiration,
 		gcInterval:  gcInterval,
-		entryMap:    map[string]*ttlEntry{},
-		mu:          &sync.RWMutex{},
+		entryMap:    map[string]ttlEntry{},
+		mu:          sync.RWMutex{},
 		exit:        make(chan bool),
 		renewOnLoad: renewOnLoad,
 	}
@@ -98,8 +98,8 @@ func (m *TTLMap) store(key string, value interface{}) {
 	} else {
 		expiration = -1
 	}
-	m.entryMap[key] = &ttlEntry{
-		Entry: &Entry{
+	m.entryMap[key] = ttlEntry{
+		Entry: Entry{
 			Key:   key,
 			Value: value,
 		},
@@ -127,6 +127,7 @@ func (m *TTLMap) Load(key string) (value interface{}, ok bool) {
 		if !item.expired() {
 			if m.renewOnLoad {
 				item.renew(m.expiration)
+				m.entryMap[key] = item
 			}
 			return item.Value, true
 		} else {
@@ -146,6 +147,7 @@ func (m *TTLMap) LoadOrStore(key string, value interface{}) (actual interface{},
 		if !item.expired() {
 			if m.renewOnLoad {
 				item.renew(m.expiration)
+				m.entryMap[key] = item
 			}
 			return item.Value, true
 		}
@@ -195,12 +197,12 @@ func (m *TTLMap) Clear() []Entry {
 	}
 	now := time.Now().UnixNano()
 	deleted := m.entryMap
-	m.entryMap = map[string]*ttlEntry{}
+	m.entryMap = map[string]ttlEntry{}
 	m.mu.Unlock()
 	var entries []Entry
 	for _, v := range deleted {
 		if v.expiration <= 0 || now <= v.expiration {
-			entries = append(entries, *v.Entry)
+			entries = append(entries, v.Entry)
 		}
 	}
 	return entries
@@ -216,6 +218,7 @@ func (m *TTLMap) Range(f func(key interface{}, value interface{}) bool) {
 		if !item.expired() {
 			if m.renewOnLoad {
 				item.renew(m.expiration)
+				m.entryMap[key] = item
 			}
 			if !f(key, item.Value) {
 				break

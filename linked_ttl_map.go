@@ -71,7 +71,7 @@ func (m *LinkedTTLMap) DeleteExpired() []Entry {
 	for _, v := range m.entryMap {
 		if v.expired() {
 			m.delete(v)
-			entries = append(entries, *v.Entry)
+			entries = append(entries, v.Entry)
 		}
 	}
 	return entries
@@ -84,24 +84,49 @@ func (m *LinkedTTLMap) store(key string, value interface{}) {
 	} else {
 		expiration = -1
 	}
-	entry := &linkedTTLEntry{
-		ttlEntry: &ttlEntry{
-			Entry: &Entry{
-				Key:   key,
-				Value: value,
+	entry, ok := m.entryMap[key]
+	if ok {
+		entry := &linkedTTLEntry{
+			ttlEntry: &ttlEntry{
+				Entry: Entry{
+					Key:   key,
+					Value: value,
+				},
+				expiration: expiration,
 			},
-			expiration: expiration,
-		},
-		before: m.tail,
-		after:  nil,
+			before: entry.before,
+			after:  entry.after,
+		}
+		if entry.before != nil {
+			entry.before.after = entry
+		} else {
+			m.head = entry
+		}
+		if entry.after != nil {
+			entry.after.before = entry
+		} else {
+			m.tail = entry
+		}
+	} else {
+		entry = &linkedTTLEntry{
+			ttlEntry: &ttlEntry{
+				Entry: Entry{
+					Key:   key,
+					Value: value,
+				},
+				expiration: expiration,
+			},
+			before: m.tail,
+			after:  nil,
+		}
+		if entry.before == nil {
+			m.head = entry
+		} else {
+			m.tail.after = entry
+		}
+		m.tail = entry
 	}
 	m.entryMap[key] = entry
-	if m.tail == nil {
-		m.head = entry
-	} else {
-		m.tail.after = entry
-	}
-	m.tail = entry
 }
 
 func (m *LinkedTTLMap) Store(key string, value interface{}) {
@@ -140,9 +165,15 @@ func (m *LinkedTTLMap) delete(item *linkedTTLEntry) interface{} {
 	delete(m.entryMap, item.Key)
 	if item.after != nil {
 		item.after.before = item.before
+		item.after = nil
+	} else {
+		m.tail = item.before
 	}
 	if item.before != nil {
 		item.before.after = item.after
+		item.before = nil
+	} else {
+		m.head = item.after
 	}
 	return item.Value
 }
@@ -213,7 +244,11 @@ func (m *LinkedTTLMap) Clear() []Entry {
 	var entries []Entry
 	for node != nil {
 		if !node.expired() {
-			entries = append(entries, *node.Entry)
+			entries = append(entries, node.Entry)
+		}
+		if node.before != nil {
+			node.before.after = nil
+			node.before = nil
 		}
 		node = node.after
 	}
@@ -243,9 +278,8 @@ func (m *LinkedTTLMap) Destroy() {
 	if m.entryMap == nil {
 		panic(errors.New(ErrMapDestroyed))
 	}
+	m.Clear()
 	m.entryMap = nil
-	m.head = nil
-	m.tail = nil
 	close(m.exit)
 }
 
